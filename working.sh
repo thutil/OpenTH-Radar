@@ -46,7 +46,6 @@ for timestamp_dir in radar_img/*/; do
         
         # Run the radar processing script with radar_process output directory
         python3 radar_process.py \
-            --template_dir ./georeferencing \
             --input_dir "$timestamp_dir" \
             --workdir "./radar_process/$timestamp" \
             --s_min 200 \
@@ -71,9 +70,3 @@ echo "Radar process directory structure:"
 tree radar_process/ 2>/dev/null || find radar_process/ -type f
 
 echo "All radar image processing completed!"
-
-
-python3 radar_tuning.py \
-  --input radar_process/1755859800/chn240_HQ_latest_rain_only.png \
-  --out rain_smooth.png \
-  --clahe 2.0
