@@ -59,14 +59,65 @@ for timestamp_dir in radar_img/*/; do
     fi
 done
 
+
+echo "================ Radar color tuning ============"
+for timestamp in radar_process/*/; do
+    if [ -d "$timestamp" ]; then
+        echo "Processing directory: $timestamp"
+        for img in "$timestamp"*.png; do
+            if [ -f "$img" ]; then
+                echo "Processing image: $img"
+                base="./${img%.*}"
+                out="${base}_smooth.png"
+                python3 heatmap.py --input_path "$img"
+            fi
+        done
+        echo "Color tuning completed for: $timestamp"
+        echo "----------------------------------------"
+    fi
+done
+
+
+echo "================ Creating Tiles ==============="
+for timestamp_dir in radar_process/*/; do
+    if [ -d "$timestamp_dir" ]; then
+        timestamp=$(basename "$timestamp_dir")
+        echo "Creating tiles for timestamp: $timestamp"
+        
+        output_dir="out/$timestamp"
+        mkdir -p "$output_dir"/{phs,chn,cri}
+        
+
+        phs_img="$timestamp_dir/phs240_HQ_latest_rain_only.png"
+        chn_img="$timestamp_dir/chn240_HQ_latest_rain_only.png"
+        cri_img="$timestamp_dir/cri240_HQ_latest_rain_only.png"
+        
+        if [ ! -f "$phs_img" ] && [ ! -f "$chn_img" ] && [ ! -f "$cri_img" ]; then
+            echo "No processed images found for $timestamp, skipping..."
+            continue
+        fi 
+        echo "1) Georeferencing images for $timestamp..."
+    
+    fi
+done
+
+echo "[DONE] All tiles created in out/ directory"
+
+
 echo "==============================================="
 echo "All tasks completed successfully!"
 echo "==============================================="
 echo "Summary:"
 echo "- Downloaded radar images to: radar_img/"
 echo "- Processed images saved to: radar_process/"
+echo "- Georeferenced tiles saved to: out/"
 echo ""
 echo "Radar process directory structure:"
 tree radar_process/ 2>/dev/null || find radar_process/ -type f
 
-echo "All radar image processing completed!"
+echo ""
+echo "Tiles directory structure:"
+tree out/ 2>/dev/null || find out/ -name "*.html" -o -name "tilemapresource.xml"
+
+echo ""
+echo "All radar image processing and tile generation completed!"
