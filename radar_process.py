@@ -14,11 +14,6 @@ def run(cmd):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument(
-        "--template_dir",
-        required=True,
-        help="Directory containing template .tif files"
-    )
-    ap.add_argument(
         "--input_dir", required=True,
         help="Directory containing input .png files"
     )
@@ -61,13 +56,14 @@ def main():
     for png_file in png_files:
         print(f"\nProcessing: {png_file.name}")
 
-        # Get corresponding template file
+        # Get corresponding template file from geo/ directory
+        # Use direct reference to reduce file size instead of copying templates
         base_name = png_file.stem  # filename without extension
-        template_file = Path(args.template_dir) / f"{base_name}_modified.tif"
+        template_file = Path("geo") / f"{base_name}.tif"
 
         if not template_file.exists():
             print(
-                f"Warning: Template file not found for {png_file.name}:"
+                f"Warning: Template file not found for {png_file.name}: "
                 f"{template_file}"
             )
             continue
@@ -75,7 +71,7 @@ def main():
         print(f"Using template: {template_file}")
 
         masked_png = work_path / f"{base_name}_rain_only.png"
-        georef_tif = work_path / f"{base_name}_rain_only_georef.tif"
+        # georef_tif = work_path / f"{base_name}_rain_only_georef.tif"
 
         # Process the PNG file
         mask_rain_from_png(
@@ -92,10 +88,7 @@ def main():
             left_crop_frac=args.left_crop_frac,
         )
         print(f"Created Mask PNG → {masked_png}")
-
-        # Georeference the masked PNG using the template
-        georeference_png(str(masked_png), str(template_file), str(georef_tif))
-        print(f"Created Georeferenced TIF → {georef_tif}")
+        print(f"Using existing template TIF → {template_file}")
 
 
 def georeference_png(masked_png_path, template_tif_path, output_tif_path):
