@@ -9,5 +9,6 @@ An open-source tool for converting radar images to map tiles.
 
 Added a heatmap feature to enhance the visual representation of radar data. The heatmap makes patterns and intensity levels more apparent, resulting in a more attractive and informative display.
 
-![TMDRawRadar](/document/tmd_raw_radar.png)
+![TMDRawRadar](/document/raw_radar.png)
 ![TMDHeatmap](/document/rain_heatmap.png)
+
