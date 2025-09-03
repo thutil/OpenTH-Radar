@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>mosaic_3857_rgba.tif</title>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+    <meta http-equiv='imagetoolbar' content='no' />
+    <style type="text/css">
+        v\:* {
+            behavior: url(#default#VML);
+        }
+
+        html,
+        body {
+            overflow: hidden;
+            padding: 0;
+            height: 100%;
+            width: 100%;
+            font-family: 'Lucida Grande', Geneva, Arial, Verdana, sans-serif;
+        }
+
+        body {
+            margin: 10px;
+            background: #fff;
+        }
+
+        h1 {
+            margin: 0;
+            padding: 6px;
+            border: 0;
+            font-size: 20pt;
+        }
+
+        #header {
+            height: 43px;
+            padding: 0;
+            background-color: #eee;
+            border: 1px solid #888;
+        }
+
+        #subheader {
+            height: 12px;
+            text-align: right;
+            font-size: 10px;
+            color: #555;
+        }
+
+        #map {
+            height: 90%;
+            border: 1px solid #888;
+        }
+    </style>
+    <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/gh/openlayers/openlayers.github.io@main/dist/en/v7.0.0/legacy/ol.css"
+        type="text/css">
+    <script src="https://cdn.jsdelivr.net/gh/openlayers/openlayers.github.io@main/dist/en/v7.0.0/legacy/ol.js"></script>
+    <script src="https://unpkg.com/ol-layerswitcher@4.1.1"></script>
+    <link rel="stylesheet" href="https://unpkg.com/ol-layerswitcher@4.1.1/src/ol-layerswitcher.css" />
+</head>
+
+<body>
+    <div id="header">
+        <h1>mosaic_3857_rgba.tif</h1>
+    </div>
+    <div id="map" class="map"></div>
+    <div id="mouse-position"></div>
+    <script type="text/javascript">
+        var mousePositionControl = new ol.control.MousePosition({
+            className: 'custom-mouse-position',
+            target: document.getElementById('mouse-position'),
+            undefinedHTML: '&nbsp;'
+        });
+        var map = new ol.Map({
+            controls: ol.control.defaults.defaults().extend([mousePositionControl]),
+            target: 'map',
+            layers: [
+                new ol.layer.Group({
+                    title: 'Base maps',
+                    layers: [
+                        new ol.layer.Tile({
+                            source: new ol.source.XYZ({ url: "http://ms.longdo.com/mmmap/img.php?zoom={z}&x={x}&y={y}&mode=gray&key=772c8a5cf3847f1dd1aecd56fd8b703c&proj=epsg3857&HD=1" })
+                        })
+                    ],
+                }),
+                new ol.layer.Group({
+                    title: 'Overlay',
+                    layers: [
+                        new ol.layer.Tile({
+                            title: 'Overlay',
+                            opacity: 0.7,
+                            extent: [10783253.836698, 1449540.725362, 11437178.725063, 2524952.745563],
+                            source: new ol.source.XYZ({
+                                attributions: '',
+                                minZoom: 5,
+                                maxZoom: 11,
+                                url: 'radar/1756919400/{z}/{x}/{-y}.png',
+                                tileSize: [256, 256],
+                                crossOrigin: 'anonymous',
+                            })
+                        }),
+                    ]
+                }),
+            ],
+            view: new ol.View({
+                center: [11110216.280881, 1987246.735463],
+                zoom: 5,
+            })
+        });
+        map.addControl(new ol.control.LayerSwitcher());
+    </script>
+</body>
+
+</html>
