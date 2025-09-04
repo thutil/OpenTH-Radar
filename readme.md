@@ -11,4 +11,3 @@ Added a heatmap feature to enhance the visual representation of radar data. The 
 
 ![TMDRawRadar](/document/raw_radar.png)
 ![TMDHeatmap](/document/rain_heatmap.png)
-
