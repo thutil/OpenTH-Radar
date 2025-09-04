@@ -1,10 +1,11 @@
-import argparse, subprocess, shutil
+import argparse
+import subprocess
+import shutil
 from pathlib import Path
 import numpy as np
 from PIL import Image
 import rasterio
 from matplotlib.colors import LinearSegmentedColormap
-import os
 import cv2
 import matplotlib.pyplot as plt
 
@@ -86,7 +87,8 @@ def create_radar_heatmap(
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     h, w, _ = image_rgb.shape
 
-    gray = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2GRAY).astype(np.float32) / 255.0
+    gray = cv2.cvtColor(image_rgb,
+                        cv2.COLOR_RGB2GRAY).astype(np.float32) / 255.0
 
     if smooth_px > 0:
         gray_smooth = cv2.GaussianBlur(
@@ -106,7 +108,9 @@ def create_radar_heatmap(
             (0.5, 0.9, 0.5, 0.85),
             (0.0, 0.75, 0.0, 1.0),
         ]
-        rain_cmap = LinearSegmentedColormap.from_list("rain_green_soft", colors, N=512)
+        rain_cmap = LinearSegmentedColormap.from_list("rain_green_soft",
+                                                      colors,
+                                                      N=512)
     else:
         colors = [
             (0.0, 0.0, 0.0, 0.0),
@@ -115,7 +119,9 @@ def create_radar_heatmap(
             (0.90, 0.90, 0.00, 0.9),
             (1.00, 0.60, 0.10, 0.95),
         ]
-        rain_cmap = LinearSegmentedColormap.from_list("rain_soft", colors, N=512)
+        rain_cmap = LinearSegmentedColormap.from_list("rain_soft",
+                                                      colors,
+                                                      N=512)
 
     dpi = 100
     fig = plt.figure(figsize=(w / dpi, h / dpi), dpi=dpi)
