@@ -78,28 +78,28 @@ for timestamp in radar_process/*/; do
 done
 
 
-echo "================ Creating Tiles ==============="
-for timestamp_dir in radar_process/*/; do
-    if [ -d "$timestamp_dir" ]; then
-        timestamp=$(basename "$timestamp_dir")
-        echo "Creating tiles for timestamp: $timestamp"
+# echo "================ Creating Tiles ==============="
+# for timestamp_dir in radar_process/*/; do
+#     if [ -d "$timestamp_dir" ]; then
+#         timestamp=$(basename "$timestamp_dir")
+#         echo "Creating tiles for timestamp: $timestamp"
         
-        output_dir="out/$timestamp"
-        mkdir -p "$output_dir"/{phs,chn,cri}
+#         output_dir="out/$timestamp"
+#         mkdir -p "$output_dir"/{phs,chn,cri}
         
 
-        phs_img="$timestamp_dir/phs240_HQ_latest_rain_only.png"
-        chn_img="$timestamp_dir/chn240_HQ_latest_rain_only.png"
-        cri_img="$timestamp_dir/cri240_HQ_latest_rain_only.png"
+#         phs_img="$timestamp_dir/phs240_HQ_latest_rain_only.png"
+#         chn_img="$timestamp_dir/chn240_HQ_latest_rain_only.png"
+#         cri_img="$timestamp_dir/cri240_HQ_latest_rain_only.png"
         
-        if [ ! -f "$phs_img" ] && [ ! -f "$chn_img" ] && [ ! -f "$cri_img" ]; then
-            echo "No processed images found for $timestamp, skipping..."
-            continue
-        fi 
-        echo "1) Georeferencing images for $timestamp..."
+#         if [ ! -f "$phs_img" ] && [ ! -f "$chn_img" ] && [ ! -f "$cri_img" ]; then
+#             echo "No processed images found for $timestamp, skipping..."
+#             continue
+#         fi
+
     
-    fi
-done
+#     fi
+# done
 
 echo "[DONE] All tiles created in out/ directory"
 
