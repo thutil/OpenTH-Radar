@@ -87,8 +87,7 @@ def create_radar_heatmap(
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     h, w, _ = image_rgb.shape
 
-    gray = cv2.cvtColor(image_rgb,
-                        cv2.COLOR_RGB2GRAY).astype(np.float32) / 255.0
+    gray = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2GRAY).astype(np.float32) / 255.0
 
     if smooth_px > 0:
         gray_smooth = cv2.GaussianBlur(
@@ -108,9 +107,7 @@ def create_radar_heatmap(
             (0.5, 0.9, 0.5, 0.85),
             (0.0, 0.75, 0.0, 1.0),
         ]
-        rain_cmap = LinearSegmentedColormap.from_list("rain_green_soft",
-                                                      colors,
-                                                      N=512)
+        rain_cmap = LinearSegmentedColormap.from_list("rain_green_soft", colors, N=512)
     else:
         colors = [
             (0.0, 0.0, 0.0, 0.0),
@@ -119,9 +116,7 @@ def create_radar_heatmap(
             (0.90, 0.90, 0.00, 0.9),
             (1.00, 0.60, 0.10, 0.95),
         ]
-        rain_cmap = LinearSegmentedColormap.from_list("rain_soft",
-                                                      colors,
-                                                      N=512)
+        rain_cmap = LinearSegmentedColormap.from_list("rain_soft", colors, N=512)
 
     dpi = 100
     fig = plt.figure(figsize=(w / dpi, h / dpi), dpi=dpi)
@@ -137,6 +132,70 @@ def create_radar_heatmap(
         transparent=True,
     )
     plt.close(fig)
+
+
+def fix_radar_gaps(
+    img_bgra: np.ndarray,
+    nonblack_threshold: int = 10,
+    neighbor_kernel_size: int = 6,
+    min_neighbors: int = 6,
+    disk_dilate: int = 31,
+    inpaint_radius: int = 3,
+    feather_px: int = 1,
+    max_alpha: int = 255, 
+    antialias_sigma: float = 0.8, 
+) -> np.ndarray:
+
+    if img_bgra.ndim == 3 and img_bgra.shape[2] == 4:
+        bgr = img_bgra[:, :, :3].copy()
+        _ = img_bgra[:, :, 3]
+    else:
+        bgr = img_bgra.copy()
+
+    gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+    nonblack = (gray > nonblack_threshold).astype(np.uint8)
+
+    k = np.ones((neighbor_kernel_size, neighbor_kernel_size), np.uint8)
+    neighbor_count = cv2.filter2D(nonblack, -1, k, borderType=cv2.BORDER_DEFAULT)
+    is_black = (nonblack == 0).astype(np.uint8)
+    gap_mask = ((neighbor_count >= min_neighbors) & (is_black == 1)).astype(
+        np.uint8
+    ) * 255
+
+    disk_area = cv2.dilate(
+        nonblack,
+        cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (disk_dilate, disk_dilate)),
+        iterations=1,
+    )
+    gap_mask = cv2.bitwise_and(gap_mask, (disk_area * 255).astype(np.uint8))
+
+    repaired = cv2.inpaint(
+        bgr, gap_mask, inpaintRadius=inpaint_radius, flags=cv2.INPAINT_TELEA
+    )
+
+    core = cv2.morphologyEx(
+        nonblack,
+        cv2.MORPH_CLOSE,
+        cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)),
+    )
+    core = cv2.morphologyEx(
+        core,
+        cv2.MORPH_OPEN,
+        cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)),
+    )
+
+    dist_in = cv2.distanceTransform(core, cv2.DIST_L2, 5).astype(np.float32)
+
+    if feather_px <= 0:
+        ramp = core.astype(np.float32)
+    else:
+        ramp = np.clip(dist_in / float(feather_px), 0.0, 1.0)
+    a = (ramp * float(max_alpha)).astype(np.uint8)
+    if antialias_sigma > 0:
+        a = cv2.GaussianBlur(a, ksize=(0, 0), sigmaX=antialias_sigma)
+
+    out = np.dstack([repaired, a])
+    return out
 
 
 def copy_georef_from_template(template_tif, input_rgba_png, out_tif):
@@ -216,76 +275,87 @@ def main():
     )
     print(f"[OK] Masked PNG → {masked_png}")
 
-    create_radar_heatmap(
-        input_path=masked_png,
-        smooth_px=8,
-        gamma=0.85,
-        low_cut=0.15,
-        feather=0.12,
-        use_green_only=False,
+    # create_radar_heatmap(
+    #     input_path=masked_png,
+    #     smooth_px=8,
+    #     gamma=0.85,
+    #     low_cut=0.15,
+    #     feather=0.12,
+    #     use_green_only=False,
+    # )
+
+    out = fix_radar_gaps(
+        img_bgra=cv2.imread(str(masked_png), cv2.IMREAD_UNCHANGED),
+        nonblack_threshold=5,
+        neighbor_kernel_size=3,
+        min_neighbors=3,
+        disk_dilate=31,
+        inpaint_radius=3,
     )
+
+    cv2.imwrite(str(masked_heatmap_png), out)
 
     copy_georef_from_template(
         args.template_tif, str(masked_heatmap_png), str(georef_tif)
     )
-    print(f"[OK] Georeferenced TIFF → {georef_tif}")
+    # print(f"[OK] Georeferenced TIFF → {georef_tif}")
 
-    if args.skip_tiles:
-        return
+    # if args.skip_tiles:
+    #     return
 
-    run(
-        [
-            "gdalwarp",
-            "-multi",
-            "-wo",
-            "NUM_THREADS=ALL_CPUS",
-            "-overwrite",
-            "-t_srs",
-            "EPSG:3857",
-            "-r",
-            "near",
-            "-srcalpha",
-            "-dstalpha",
-            "-of",
-            "GTiff",
-            "-co",
-            "PHOTOMETRIC=RGB",
-            "-co",
-            "ALPHA=YES",
-            str(georef_tif),
-            str(webm_tif),
-        ]
-    )
+    # run(
+    #     [
+    #         "gdalwarp",
+    #         "-multi",
+    #         "-wo",
+    #         "NUM_THREADS=ALL_CPUS",
+    #         "-overwrite",
+    #         "-t_srs",
+    #         "EPSG:3857",
+    #         "-r",
+    #         "near",
+    #         "-srcalpha",
+    #         "-dstalpha",
+    #         "-of",
+    #         "GTiff",
+    #         "-co",
+    #         "PHOTOMETRIC=RGB",
+    #         "-co",
+    #         "ALPHA=YES",
+    #         str(georef_tif),
+    #         str(webm_tif),
+    #     ]
+    # )
 
-    run(
-        [
-            "gdal_translate",
-            "-b",
-            "1",
-            "-b",
-            "2",
-            "-b",
-            "3",
-            "-b",
-            "4",
-            str(webm_tif),
-            str(webm_rgba_tif),
-        ]
-    )
+    # run(
+    #     [
+    #         "gdal_translate",
+    #         "-b",
+    #         "1",
+    #         "-b",
+    #         "2",
+    #         "-b",
+    #         "3",
+    #         "-b",
+    #         "4",
+    #         str(webm_tif),
+    #         str(webm_rgba_tif),
+    #     ]
+    # )
 
-    tiles_dir.mkdir(exist_ok=True, parents=True)
-    run(
-        [
-            "gdal2tiles.py",
-            "-z",
-            f"{args.zmin}-{args.zmax}",
-            "-r",
-            "near",
-            str(webm_rgba_tif),
-            str(tiles_dir),
-        ]
-    )
-    print(f"[DONE] Tiles at: {tiles_dir}")
+    # tiles_dir.mkdir(exist_ok=True, parents=True)
+    # run(
+    #     [
+    #         "gdal2tiles.py",
+    #         "-z",
+    #         f"{args.zmin}-{args.zmax}",
+    #         "-r",
+    #         "near",
+    #         str(webm_rgba_tif),
+    #         str(tiles_dir),
+    #     ]
+    # )
+    # print(f"[DONE] Tiles at: {tiles_dir}")
 
 
 if __name__ == "__main__":
