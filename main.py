@@ -1,20 +1,66 @@
 import os
 import time
 from fastapi import FastAPI
-import socket
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, Response
+from PIL import Image
+import io
+from fastapi.responses import HTMLResponse
 
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
+# ลบการ mount static files
+# app.mount("/radar", StaticFiles(directory="radar"), name="radar")
 
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 def read_root():
-    return {"status": "OK"}
+    views_dir = os.path.join(os.path.dirname(__file__), "views")
+    index_path = os.path.join(views_dir, "index.html")
+    if os.path.exists(index_path):
+        with open(index_path, "r", encoding="utf-8") as f:
+            html_content = f.read()
+        return HTMLResponse(content=html_content)
+    else:
+        return HTMLResponse(content="<h1>index.html not found</h1>", status_code=404)
+
+def create_empty_tile():
+    img = Image.new('RGBA', (512, 512), (0, 0, 0, 0))
+    img_byte_arr = io.BytesIO()
+    img.save(img_byte_arr, format='PNG', optimize=True)
+    img_byte_arr.seek(0)
+    return img_byte_arr.getvalue()
+
+
+@app.get("/radar/{timestamp}/{zoom}/{x}/{y}.png")
+def serve_tile(timestamp: str, zoom: str, x: str, y: str):
+    radar_dir = "/app/radar"
+    tile_path = f"{radar_dir}/{timestamp}/{zoom}/{x}/{y}.png"
+    if os.path.exists(tile_path):
+        return FileResponse(
+            tile_path,
+            media_type="image/png",
+            headers={"Cache-Control": "public, max-age=3600"}
+        )
+    else:
+        empty_tile = create_empty_tile()
+        return Response(
+            content=empty_tile,
+            media_type="image/png",
+            headers={"Cache-Control": "public, max-age=300"}
+        )
 
 
 @app.get("/api/v1/weather")
 def get_weather_data():
 
-    radar_dir = "/Users/bankjirapan/MyDeveloper/OpenTH-Radar/radar"
+    radar_dir = "/app/radar"
 
     if not os.path.exists(radar_dir):
         return {"error": "Radar directory not found"}
@@ -45,7 +91,7 @@ def get_weather_data():
     response = {
         "version": "1.0",
         "generated": current_time,
-        "host": socket.gethostname(),
+        "host": "http://localhost:8000",
         "radar": {
             "past": past_data
         }
