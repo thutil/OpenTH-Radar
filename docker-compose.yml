@@ -1,0 +1,20 @@
+services:
+  radar-service:
+    build: .
+    container_name: opensh-radar
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./radar:/app/radar
+      - ./geotif:/app/geotif
+      - ./logs:/app/logs
+      - ./out:/app/out
+    environment:
+      - PYTHONPATH=/app
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
