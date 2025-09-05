@@ -6,6 +6,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y \
     gdal-bin \
     libgdal-dev \
+    python3-gdal \
     curl \
     cron \
     supervisor \
@@ -25,9 +26,8 @@ COPY requirements-minimal.txt .
 COPY requirements-web.txt .
 
 RUN pip install --upgrade pip
-RUN GDAL_VERSION=$(gdal-config --version) && pip install GDAL==$GDAL_VERSION
-RUN pip install -r requirements-web.txt
-RUN pip install -r requirements-minimal.txt
+RUN pip install --no-cache-dir -r requirements-web.txt
+RUN pip install --no-cache-dir -r requirements-minimal.txt
 
 COPY . .
 
