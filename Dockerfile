@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1
 ENV DEBIAN_FRONTEND=noninteractive
@@ -25,7 +25,7 @@ COPY requirements-minimal.txt .
 COPY requirements-web.txt .
 
 RUN pip install --upgrade pip
-RUN pip install "pygdal==$(gdal-config --version).*"
+RUN GDAL_VERSION=$(gdal-config --version) && pip install GDAL==$GDAL_VERSION
 RUN pip install -r requirements-web.txt
 RUN pip install -r requirements-minimal.txt
 
