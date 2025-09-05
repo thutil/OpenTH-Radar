@@ -1,6 +1,7 @@
-# !/usr/bin/env bash
+#!/bin/bash
 set -euo pipefail
-source .venv/bin/activate
+# Remove virtual environment activation for Docker
+# source .venv/bin/activate
 
 baseURL="https://weather.tmd.go.th"
 
@@ -27,13 +28,13 @@ echo "==============================================="
 echo "...... Starting radar image processing........   "
 echo "==============================================="
 python3 radar_process.py --template_tif ./geotif/chn240.tif --input_png chn240_HQ_latest.png \
-  --workdir out/chn --zmin 5 --zmax 11 --s_min=160 --v_min=150 --skip_tiles
+  --workdir out/chn --zmin 5 --zmax 11 --h_low=5 --h_high=109 --s_min=196 --v_min=180 --skip_tiles
 
 python3 radar_process.py --template_tif ./geotif/phs240.tif --input_png phs240_HQ_latest.png \
-  --workdir out/phs --zmin 5 --zmax 11 --s_min=160 --v_min=150 --skip_tiles
+  --workdir out/phs --zmin 5 --zmax 11 --h_low=5 --h_high=109 --s_min=196 --v_min=180 --skip_tiles
 
 python3 radar_process.py --template_tif ./geotif/cri240.tif --input_png cri240_HQ_latest.png \
-  --workdir out/cri --zmin 5 --zmax 11 --s_min=116 --v_min=150 --skip_tiles
+  --workdir out/cri --zmin 5 --zmax 11 --h_low=5 --h_high=109 --s_min=116 --v_min=180 --skip_tiles
 
 # python3 radar_process.py --template_tif ./geotif/skn240.tif --input_png skn240_HQ_latest.png \
 #   --workdir out/skn --zmin 5 --zmax 11 --s_min=160 --v_min=150 --skip_tiles
@@ -42,6 +43,11 @@ python3 radar_process.py --template_tif ./geotif/cri240.tif --input_png cri240_H
 echo "==============================================="
 echo "..... Starting radar image to tile XYZ......   "
 echo "==============================================="
+
+# Clean previous output files
+rm -f out/source_mosaic.vrt out/mosaic_3857.tif out/mosaic_3857_rgba.tif
+rm -rf out/tiles
+
 gdalbuildvrt -resolution highest \
   -hidenodata \
   -srcnodata "0 0 0 0" -vrtnodata "0 0 0 0" \
@@ -72,7 +78,7 @@ echo "....🌧️  Create tile with timestamp............."
 echo "==============================================="
 currentTime=$(date +%s)
 roundedTime=$(( (currentTime / 600) * 600 ))
-echo " 🌧️  Creating tiles for timestamp: $(date -r $roundedTime +'%Y-%m-%d %H:%M:%S')"
+echo " 🌧️  Creating tiles for timestamp: $(date -d @$roundedTime +'%Y-%m-%d %H:%M:%S')"
 
 if [ ! -d "./radar/$roundedTime" ]; then
     mkdir -p "./radar/$roundedTime"
