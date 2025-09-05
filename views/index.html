@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="utf-8" />
+    <title>mosaic_3857_rgba.tif — MapLibre</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- MapLibre GL -->
+    <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+    <style>
+        html,
+        body {
+            height: 100%;
+            margin: 0;
+            font-family: 'Lucida Grande', Geneva, Arial, Verdana, sans-serif;
+        }
+
+        #header {
+            padding: 10px 12px;
+            background: #eee;
+            border-bottom: 1px solid #888;
+        }
+
+        #map {
+            position: absolute;
+            top: 55px;
+            bottom: 30px;
+            left: 10px;
+            right: 10px;
+            border: 1px solid #888;
+        }
+
+        #mouse-position {
+            position: absolute;
+            left: 12px;
+            bottom: 6px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 4px 8px;
+            border: 1px solid #888;
+            border-radius: 6px;
+            font-size: 12px;
+        }
+
+        #layer-switcher {
+            position: absolute;
+            right: 22px;
+            top: 62px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 8px 10px;
+            border: 1px solid #888;
+            border-radius: 8px;
+            font-size: 13px;
+        }
+
+        #time-controls {
+            position: absolute;
+            left: 22px;
+            top: 62px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 8px 10px;
+            border: 1px solid #888;
+            border-radius: 8px;
+            font-size: 13px;
+            min-width: 200px;
+        }
+
+        .row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin: 4px 0;
+        }
+
+        .slider {
+            width: 140px;
+        }
+
+        #time-select {
+            width: 100%;
+            padding: 4px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        #refresh-times {
+            background: #007cba;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        #refresh-times:hover {
+            background: #005a87;
+        }
+
+        #refresh-times:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .loading {
+            color: #666;
+            font-style: italic;
+        }
+
+        #navigation-controls {
+            position: fixed;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.95);
+            padding: 10px 15px;
+            border: 1px solid #888;
+            border-radius: 25px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .nav-button {
+            background: #007cba;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            min-width: 80px;
+        }
+
+        .nav-button:hover:not(:disabled) {
+            background: #005a87;
+            transform: translateY(-1px);
+        }
+
+        .nav-button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .current-time {
+            font-weight: bold;
+            color: #333;
+            text-align: center;
+            min-width: 150px;
+        }
+
+        .radar-layer {
+            transition: opacity 0.5s ease-in-out;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="header">
+        <h1 style="margin:0;font-size:18px">mosaic_3857_rgba.tif — MapLibre</h1>
+    </div>
+    <div id="map"></div>
+    <div id="time-controls">
+        <div class="row">
+            <label for="time-select">เวลาเรดาร์:</label>
+        </div>
+        <div class="row">
+            <select id="time-select">
+                <option value="">กำลังโหลด...</option>
+            </select>
+        </div>
+        <div class="row">
+            <button id="refresh-times">รีเฟรชเวลา</button>
+        </div>
+    </div>
+    <div id="layer-switcher">
+        <div class="row">
+            <input id="toggle-overlay" type="checkbox" checked />
+            <label for="toggle-overlay">แสดง Overlay</label>
+        </div>
+        <div class="row">
+            <label for="opacity">ความทึบ:</label>
+            <input id="opacity" class="slider" type="range" min="0" max="1" step="0.01" value="0.7" />
+        </div>
+    </div>
+    <div id="mouse-position">lng, lat: —</div>
+
+    <div id="navigation-controls">
+        <button id="prev-button" class="nav-button">ก่อนหน้า</button>
+        <div id="current-time" class="current-time">กำลังโหลด...</div>
+        <button id="next-button" class="nav-button">ถัดไป</button>
+    </div>
+
+    <script>
+        const center = [99.80477094988949, 17.569727136576596];
+        let currentRadarTime = 1756957200;
+        let availableRadarTimes = [];
+        let currentTimeIndex = 0;
+        let isTransitioning = false;
+
+        const style = {
+            "version": 8,
+            "sources": {
+                "base-gray": {
+                    "type": "raster",
+                    "tiles": [
+                        "http://ms.longdo.com/mmmap/img.php?zoom={z}&x={x}&y={y}&mode=gray&key=772c8a5cf3847f1dd1aecd56fd8b703c&proj=epsg3857&HD=1"
+                    ],
+                    "tileSize": 256,
+                    "attribution": "© Longdo Map"
+                },
+                "radar": {
+                    "type": "raster",
+                    "scheme": "tms",
+                    "tiles": [
+                        `/radar/${currentRadarTime}/{z}/{x}/{y}.png`
+                    ],
+                    "minzoom": 5,
+                    "maxzoom": 11,
+                    "tileSize": 256,
+                    "attribution": ""
+                }
+            },
+            "layers": [
+                {
+                    "id": "base-gray",
+                    "type": "raster",
+                    "source": "base-gray",
+                    "paint": {
+                        "raster-opacity": 1,
+                        "raster-resampling": "linear",
+                        "raster-fade-duration": 0
+                    }
+                },
+                {
+                    "id": "radar",
+                    "type": "raster",
+                    "source": "radar",
+                    "paint": {
+                        "raster-opacity": 0.7,
+                        "raster-resampling": "linear",
+                        "raster-fade-duration": 0
+                    }
+                }
+            ]
+        };
+
+        const map = new maplibregl.Map({
+            container: 'map',
+            style,
+            center,
+            zoom: 5,
+        });
+
+        map.addControl(new maplibregl.NavigationControl(), 'top-left');
+
+        // Format timestamp to readable date
+        function formatTimestamp(timestamp) {
+            const date = new Date(timestamp * 1000);
+            return date.toLocaleString('th-TH', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                timeZone: 'Asia/Bangkok'
+            });
+        }
+
+        // Fetch available radar times from API
+        async function fetchRadarTimes() {
+            const refreshBtn = document.getElementById('refresh-times');
+            const timeSelect = document.getElementById('time-select');
+
+            try {
+                refreshBtn.disabled = true;
+                refreshBtn.textContent = 'กำลังโหลด...';
+                timeSelect.innerHTML = '<option value="">กำลังโหลด...</option>';
+
+                const response = await fetch('/api/v1/weather');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (data.radar && data.radar.past) {
+                    availableRadarTimes = data.radar.past.sort((a, b) => b.time - a.time); // Sort newest first
+                    updateTimeSelect();
+                } else {
+                    throw new Error('Invalid API response format');
+                }
+            } catch (error) {
+                console.error('Error fetching radar times:', error);
+                timeSelect.innerHTML = '<option value="">ข้อผิดพลาดในการโหลด</option>';
+                alert('ไม่สามารถโหลดข้อมูลเวลาเรดาร์ได้: ' + error.message);
+            } finally {
+                refreshBtn.disabled = false;
+                refreshBtn.textContent = 'รีเฟรชเวลา';
+            }
+        }
+
+        // Update time select dropdown
+        function updateTimeSelect() {
+            const timeSelect = document.getElementById('time-select');
+            timeSelect.innerHTML = '';
+
+            if (availableRadarTimes.length === 0) {
+                timeSelect.innerHTML = '<option value="">ไม่มีข้อมูล</option>';
+                updateNavigationControls();
+                return;
+            }
+
+            availableRadarTimes.forEach((radarData, index) => {
+                const option = document.createElement('option');
+                option.value = radarData.time;
+                option.textContent = formatTimestamp(radarData.time);
+
+                // Select current radar time or the first one
+                if (radarData.time === currentRadarTime || (index === 0 && !currentRadarTime)) {
+                    option.selected = true;
+                    if (!currentRadarTime) {
+                        currentRadarTime = radarData.time;
+                    }
+                    currentTimeIndex = index;
+                }
+
+                timeSelect.appendChild(option);
+            });
+
+            updateNavigationControls();
+        }
+
+        // Update navigation controls
+        function updateNavigationControls() {
+            const prevBtn = document.getElementById('prev-button');
+            const nextBtn = document.getElementById('next-button');
+            const currentTimeDiv = document.getElementById('current-time');
+
+            if (availableRadarTimes.length === 0) {
+                prevBtn.disabled = true;
+                nextBtn.disabled = true;
+                currentTimeDiv.textContent = 'ไม่มีข้อมูล';
+                return;
+            }
+
+            // Update current time display
+            const currentRadarData = availableRadarTimes[currentTimeIndex];
+            currentTimeDiv.textContent = currentRadarData ?
+                formatTimestamp(currentRadarData.time) : 'ไม่มีข้อมูล';
+
+            // Update button states
+            prevBtn.disabled = currentTimeIndex >= availableRadarTimes.length - 1 || isTransitioning;
+            nextBtn.disabled = currentTimeIndex <= 0 || isTransitioning;
+        }
+
+        function navigateRadarTime(direction) {
+            if (isTransitioning || availableRadarTimes.length === 0) return;
+
+            let newIndex;
+            if (direction === 'next') {
+                newIndex = Math.max(0, currentTimeIndex - 1);
+            } else {
+                newIndex = Math.min(availableRadarTimes.length - 1, currentTimeIndex + 1);
+            }
+
+            if (newIndex === currentTimeIndex) return;
+
+            const newTime = availableRadarTimes[newIndex].time;
+            currentTimeIndex = newIndex;
+
+            const timeSelect = document.getElementById('time-select');
+            timeSelect.value = newTime;
+
+            updateRadarLayerSmooth(newTime);
+        }
+
+        function updateRadarLayer(newTime) {
+            if (!newTime || newTime === currentRadarTime) return;
+
+            currentRadarTime = newTime;
+
+            const timeIndex = availableRadarTimes.findIndex(item => item.time === newTime);
+            if (timeIndex !== -1) {
+                currentTimeIndex = timeIndex;
+            }
+            const newTilesUrl = `/radar/${currentRadarTime}/{z}/{x}/{y}.png`;
+
+            if (map.getSource('radar')) {
+                map.removeLayer('radar');
+                map.removeSource('radar');
+            }
+
+            map.addSource('radar', {
+                "type": "raster",
+                "scheme": "tms",
+                "tiles": [newTilesUrl],
+                "minzoom": 5,
+                "maxzoom": 11,
+                "tileSize": 256,
+                "attribution": ""
+            });
+
+            map.addLayer({
+                "id": "radar",
+                "type": "raster",
+                "source": "radar",
+                "paint": {
+                    "raster-opacity": parseFloat(document.getElementById('opacity').value),
+                    "raster-resampling": "linear",
+                    "raster-fade-duration": 0
+                }
+            });
+
+            const toggle = document.getElementById('toggle-overlay');
+            const visibility = toggle.checked ? 'visible' : 'none';
+            map.setLayoutProperty('radar', 'visibility', visibility);
+
+            updateNavigationControls();
+        }
+
+        function updateRadarLayerSmooth(newTime) {
+            if (!newTime || newTime === currentRadarTime || isTransitioning) return;
+
+            isTransitioning = true;
+            updateNavigationControls();
+
+            if (map.getLayer('radar')) {
+                const fadeOutInterval = setInterval(() => {
+                    const currentOpacity = map.getPaintProperty('radar', 'raster-opacity') || 0;
+                    const newOpacity = Math.max(0, currentOpacity - 0.1);
+                    map.setPaintProperty('radar', 'raster-opacity', newOpacity);
+
+                    if (newOpacity <= 0) {
+                        clearInterval(fadeOutInterval);
+                        currentRadarTime = newTime;
+                        const timeIndex = availableRadarTimes.findIndex(item => item.time === newTime);
+                        if (timeIndex !== -1) {
+                            currentTimeIndex = timeIndex;
+                        }
+
+                        // Update source
+                        const newTilesUrl = `/radar/${currentRadarTime}/{z}/{x}/{y}.png`;
+
+                        if (map.getSource('radar')) {
+                            map.removeLayer('radar');
+                            map.removeSource('radar');
+                        }
+
+                        map.addSource('radar', {
+                            "type": "raster",
+                            "scheme": "tms",
+                            "tiles": [newTilesUrl],
+                            "minzoom": 5,
+                            "maxzoom": 11,
+                            "tileSize": 256,
+                            "attribution": ""
+                        });
+
+                        map.addLayer({
+                            "id": "radar",
+                            "type": "raster",
+                            "source": "radar",
+                            "paint": {
+                                "raster-opacity": 0,
+                                "raster-resampling": "linear",
+                                "raster-fade-duration": 0
+                            }
+                        });
+
+                        const toggle = document.getElementById('toggle-overlay');
+                        const visibility = toggle.checked ? 'visible' : 'none';
+                        map.setLayoutProperty('radar', 'visibility', visibility);
+
+                        const targetOpacity = parseFloat(document.getElementById('opacity').value);
+                        const fadeInInterval = setInterval(() => {
+                            const currentOpacity = map.getPaintProperty('radar', 'raster-opacity') || 0;
+                            const newOpacity = Math.min(targetOpacity, currentOpacity + 0.1);
+                            map.setPaintProperty('radar', 'raster-opacity', newOpacity);
+
+                            if (newOpacity >= targetOpacity) {
+                                clearInterval(fadeInInterval);
+                                isTransitioning = false;
+                                updateNavigationControls();
+                            }
+                        }, 10);
+                    }
+                }, 10);
+            } else {
+                // No existing layer, just add new one
+                updateRadarLayer(newTime);
+                isTransitioning = false;
+            }
+        }
+
+        // Event listeners
+        const mp = document.getElementById('mouse-position');
+        map.on('mousemove', (e) => {
+            const lng = e.lngLat.lng.toFixed(5);
+            const lat = e.lngLat.lat.toFixed(5);
+            mp.textContent = `lng, lat: ${lng}, ${lat}`;
+        });
+
+        const toggle = document.getElementById('toggle-overlay');
+        toggle.addEventListener('change', () => {
+            const visibility = toggle.checked ? 'visible' : 'none';
+            if (map.getLayer('radar')) {
+                map.setLayoutProperty('radar', 'visibility', visibility);
+            }
+        });
+
+        const opacity = document.getElementById('opacity');
+        opacity.addEventListener('input', () => {
+            if (map.getLayer('radar')) {
+                map.setPaintProperty('radar', 'raster-opacity', parseFloat(opacity.value));
+            }
+        });
+
+        const timeSelect = document.getElementById('time-select');
+        timeSelect.addEventListener('change', (e) => {
+            const selectedTime = parseInt(e.target.value);
+            if (selectedTime && selectedTime !== currentRadarTime) {
+                updateRadarLayerSmooth(selectedTime);
+            }
+        });
+
+        const refreshBtn = document.getElementById('refresh-times');
+        refreshBtn.addEventListener('click', fetchRadarTimes);
+
+        // Navigation button event listeners
+        const prevBtn = document.getElementById('prev-button');
+        const nextBtn = document.getElementById('next-button');
+
+        prevBtn.addEventListener('click', () => navigateRadarTime('prev'));
+        nextBtn.addEventListener('click', () => navigateRadarTime('next'));
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+                e.preventDefault();
+                navigateRadarTime('prev');
+            } else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                navigateRadarTime('next');
+            }
+        });
+
+        // Initialize when map loads
+        map.on('load', () => {
+            // Load initial radar times
+            fetchRadarTimes();
+        });
+    </script>
+</body>
+
+</html>
